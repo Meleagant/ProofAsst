@@ -55,7 +55,7 @@ Ltac tauto1 :=
     (* Rule : [/\ - I] *)
     | |- ?A /\ ?B =>
         idtac "/\-I";
-        split; [tauto1 | tauto1]
+        split; [tauto1 | tauto1] 
     (* Rule : [/\ - E] *)
     | H: ?A /\ ?B |- _ =>
         idtac "/\-E";
@@ -119,12 +119,104 @@ Section Tests.
     Proof.
         tauto1.
     Qed.
+    Lemma test_fast : A /\ B \/ True.
+    Proof.
+        tauto1.
+    Qed.
 End Tests.
 
 (* II.3 Backtrack control *)
 (* ---------------------- *)
 
-(* TODO *)
+(* 1- *)
+(* Les règles réversibles sont : 
+    - [-> - I]
+    - [/\ - I]
+    - [/\ - E]
+    - [\/ - I]
+    - [\/ - E]
+La règle [-> - E] n'est pas réversible en effet si on considère le séquent : 
+
+          C |- A                B, C |- C
+    -------------------------------------------
+                   A -> B, C |- C
+    *)
+
+Ltac tauto2 :=
+    match goal with
+    (* ===/  Easy rules  \=== *)
+    (* ---------------------- *)
+    (* Rule : [Ax] *)
+    | _ : ?A |- ?A =>
+        idtac "Ax";
+        assumption
+    (* Rule : [False - E] *)
+    | _ : False |- _ =>
+        idtac "False - E";
+        contradiction
+    (* Rule : [True - I] *)
+    | |- True =>
+        idtac "True - I";
+        auto
+
+    (* ===/  Rules for ->  \=== *)
+    (* ----------------------- *)
+    (* Rule : [-> - I]*)
+    | |- ?A -> ?B =>
+        idtac "->-I";
+        try (intro; tauto2); idtac "back"; fail 1
+    (* Rule : [-> - E]*)
+    | H : ?A -> ?B |- ?C =>
+        idtac "->-E";
+        let Ha := fresh in
+        let Hb := fresh in
+        assert (Hb : B);
+            [
+                assert( Ha : A);
+                [
+                    clear H; tauto2
+                |
+                    apply H in Ha;
+                    assumption
+                ]
+            |
+            clear H; tauto2]
+
+
+    (* ===/  Rules for /\  \=== *)
+    (* ----------------------- *)
+    (* Rule : [/\ - I] *)
+    | |- ?A /\ ?B =>
+        idtac "/\-I";
+        try (split; [tauto2 | tauto2]); idtac "back /\-I"; fail 1 
+    (* Rule : [/\ - E] *)
+    | H: ?A /\ ?B |- _ =>
+        idtac "/\-E";
+        try (destruct H; tauto2); idtac "back"; fail 1
+
+    (* ===/  Rules for \/  \=== *)
+    (* ----------------------- *)
+    (* Rule : [\/ - I] *)
+    | |- ?A \/ ?B =>
+        idtac "\/-I";
+        try (left; tauto2) || (right; tauto2); idtac "back"; fail 1
+    (* Rule : [\/ - E] *)
+    | H: ?A \/ ?B |- _ =>
+        idtac "\/-E";
+        (destruct H; [tauto2 | tauto2]) + (idtac "back \/-E"; fail 1)
+    end.
+
+
+Lemma dummy_back : forall A B C : Prop,
+    A /\ C -> B \/ B -> B /\ C.
+Proof.
+    intros A B C.
+    tauto1.
+    Restart.
+    intros A B C.
+    Print nil.
+    tauto2.
+Qed. 
 
 (* III. Formalizing the tactic *)
 (* ========================== *)
@@ -185,6 +277,8 @@ Fixpoint sem (f : form) : Prop :=
     | And f1 f2 => (sem f1) /\ (sem f2)
     | Or f1 f2 => (sem f1) \/ (sem f2)
     end.
+
+Require Import Fold_Left_Recursor.
 
 Definition seq_valid (s : seq) : Prop :=
     sem (fst s) -> sem (snd s).
