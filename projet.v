@@ -334,8 +334,11 @@ Fixpoint elim_rules_multi (hyps : picked_hyp) (goal : form) : subgoals :=
   | hyp :: tl => merge_subgoals (elim_rules hyp goal) (elim_rules_multi tl goal)
   end.
 
+Definition elim_rules_final (seq : seq) : subgoals :=
+  (elim_rules_multi (pick_hyp seq) (snd seq)).
+  
 Definition step (seq : seq) : subgoals :=
-  merge_subgoals (intro_rules seq) (elim_rules_multi (pick_hyp seq) (snd seq)).
+  merge_subgoals (intro_rules seq) (elim_rules_final seq).
 
 (* 4- *)
 
@@ -389,13 +392,166 @@ Definition size_seq (seq : seq) : nat :=
 
 (* 2- *)
 
+Require Import Omega.
+
+Lemma size_decrease_intro : 
+  forall s : seq, forall s' : seq, forall subgoal : list seq, 
+  (In subgoal (intro_rules s)) /\ (In s' subgoal) 
+    -> (size_seq s') < (size_seq s).
+Proof.
+  intros s s' sg.
+  unfold intro_rules.
+  case_eq (snd s).
+  - intros n H9 H; destruct H as [H1 H2]; unfold In in H1; contradiction.
+  - intros H9 H; destruct H as [H1 H2]; unfold In in H1; contradiction.
+  - intros H9 H; destruct H as [H1 H2]; unfold In in H1; contradiction.
+  - intros f1 f2 Hs H.
+    destruct H as [H1 H2].
+    assert (s' = (f1 :: fst s, f2)).
+    + unfold In in H1.
+      destruct H1; try contradiction.
+      rewrite <- H in H2.
+      unfold In in H2.
+      destruct H2; try contradiction.
+      rewrite H0; reflexivity.
+    + unfold size_seq.
+      rewrite H; rewrite Hs.
+      simpl; omega.
+  - intros f1 f2 Hs H.
+    destruct H as [H1 H2].
+    unfold In in H1.
+    destruct H1; try contradiction.
+    rewrite <- H in H2.
+    unfold In in H2; unfold In in H2.
+    destruct H2.
+    * unfold size_seq.
+      rewrite <- H0; rewrite Hs.
+      simpl; omega.
+    * destruct H0; try contradiction.
+      unfold size_seq.
+      rewrite <- H0; rewrite Hs.
+      simpl; omega.
+  - intros f1 f2 Hs H.
+    destruct H as [H1 H2].
+    unfold In in H1.
+    destruct H1.
+    + rewrite <- H in H2.
+      unfold In in H2.
+      destruct H2; try contradiction.
+      unfold size_seq.
+      rewrite <- H0; rewrite Hs.
+      simpl; omega.
+    + destruct H; try contradiction.
+      rewrite <- H in H2.
+      destruct H2; try contradiction.
+      unfold size_seq.
+      rewrite <- H0; rewrite Hs.
+      simpl; omega.
+Qed.
+
+Lemma size_decrease_elim : 
+  forall hyps : form*list form, forall goal : form, forall s' : seq, forall subgoal : list seq, 
+  (In subgoal (elim_rules hyps goal)) /\ (In s' subgoal) -> 
+  (size_seq s') < (size_seq ((fst hyps)::(snd hyps), goal)).
+Proof.
+  intros hyps goal s' sg.
+  unfold elim_rules.
+  case_eq (fst hyps).
+  - intros n H9 H; destruct H as [H1 H2]; unfold In in H1; contradiction.
+  - intros H9 H; destruct H as [H1 H2]; unfold In in H1; contradiction.
+  - intros H9 H; destruct H as [H1 H2]; unfold In in H1; contradiction.
+  - intros f1 f2 Hs H.
+    destruct H as [H1 H2].
+    unfold In in H1.
+    destruct H1 as [H1 | H1]; try contradiction.
+    rewrite <- H1 in H2.
+    unfold In in H2.
+    destruct H2 as [H2 | H2].
+    + rewrite <- H2.
+      unfold size_seq; simpl; omega.
+    + destruct H2 as [H2|H2]; try contradiction.
+      rewrite <- H2.
+      unfold size_seq; simpl; omega.
+  - intros f1 f2 Hs H.
+    destruct H as [H1 H2].
+    unfold In in H1.
+    destruct H1 as [H1|H1]; try contradiction.
+    rewrite <- H1 in H2.
+    unfold In in H2.
+    destruct H2 as [H2|H2]; try contradiction.
+    rewrite <- H2.
+    unfold size_seq; simpl; omega.
+  - intros f1 f2 Hs H.
+    destruct H as [H1 H2].
+    unfold In in H1.
+    destruct H1 as [H1 | H1 ]; try contradiction.
+    rewrite <- H1 in H2.
+    unfold In in H2.
+    destruct H2 as [H2 | H2].
+    + rewrite <- H2.
+      unfold size_seq; simpl; omega.
+    + destruct H2 as [H2|H2]; try contradiction.
+      rewrite <- H2.
+      unfold size_seq; simpl; omega.
+Qed.
+
+Lemma size_equal_pick_hyp_aux :
+  forall hyps : list form, forall p_hyp : form * list form, 
+  In p_hyp (pick_hyp_aux hyps) -> 
+    size_form (fst p_hyp) + size_hyps (snd p_hyp) = size_hyps hyps.
+Proof.
+  intros hyps.
+  induction hyps.
+  + intros p_hyp H.
+    unfold pick_hyp_aux in H.
+    unfold In in H.
+    contradiction.
+  + (* cas [hyps = a::hyps'] *)
+    intros p_hyp H.
+    simpl In in H.
+    destruct H.
+    - (* cas [p_hyp = a] *) 
+      rewrite <- H.
+      simpl.
+      omega.
+    - (* cas [p_hyp in hyps'] *)
+    unfold In in H.
+
+Lemma size_equal_pick_hyp :
+  forall s : seq, forall hyps : form * list form, 
+  In hyps (pick_hyp s) -> 
+    size_form (fst hyps) + size_hyps (snd hyps) = size_hyps (fst s).
+
+
+Lemma size_decrease_elim_final : 
+  forall s : seq, forall s' : seq, forall subgoal : list seq, 
+  (In subgoal (elim_rules_final s)) /\ (In s' subgoal) 
+    -> (size_seq s') < (size_seq s).
+Proof.
+  intros s s' sg.
+  intros H; destruct H as [Hsg Hs'].
+  case_eq (elim_rules_final s).
+  + intro H.
+    rewrite H in Hsg.
+    unfold In in Hsg.
+    contradiction.
+  + intros l l0 H.
+    unfold elim_rules_final in H.
+    unfold pick_hyp in H.
+    unfold elim_rules_multi in H.
+
+
 Lemma size_decrease : 
   forall s : seq, forall s' : seq, forall subgoal : list seq, 
   (In subgoal (step s)) /\ (In s' subgoal) -> (size_seq s') < (size_seq s).
 Proof.
   intros s s' sg.
   intros H.
+  destruct H as [Hsg Hs'].
+  unfold step in Hsg.
   
+  unfold merge_subgoals in Hsg.
+    
   simpl.
 Admitted.
 
