@@ -497,25 +497,38 @@ Qed.
 
 Lemma size_equal_pick_hyp_aux :
   forall hyps : list form, forall p_hyp : form * list form, 
-  In p_hyp (pick_hyp_aux hyps) -> 
-    size_form (fst p_hyp) + size_hyps (snd p_hyp) = size_hyps hyps.
+  (In p_hyp (pick_hyp_aux hyps) -> 
+    size_form (fst p_hyp) + size_hyps (snd p_hyp) = size_hyps hyps)
+  /\
+  (forall a : form,In p_hyp (add_hyp a (pick_hyp_aux hyps)) ->
+    size_form (fst p_hyp) + size_hyps (snd p_hyp) = size_form a + size_hyps hyps).
 Proof.
-  intros hyps.
+  intros hyps p_hyp.
   induction hyps.
-  + intros p_hyp H.
-    unfold pick_hyp_aux in H.
-    unfold In in H.
-    contradiction.
+  + split.
+    - intros H.
+      unfold pick_hyp_aux in H.
+      unfold In in H.
+      contradiction.
+    - intros a H.
+      simpl in H.
+      contradiction.
   + (* cas [hyps = a::hyps'] *)
-    intros p_hyp H.
-    simpl In in H.
-    destruct H.
-    - (* cas [p_hyp = a] *) 
-      rewrite <- H.
-      simpl.
-      omega.
-    - (* cas [p_hyp in hyps'] *)
-    unfold In in H.
+    split.
+    - intro H; simpl in H.
+      destruct H as [ H | H].
+      * rewrite <- H; simpl; omega.
+      * destruct IHhyps as [I0 IH].
+        simpl.
+        apply IH.
+        apply H.
+    - intros a0 H.
+      simpl in H.
+      destruct H as [ H | H ].
+      * rewrite <- H; simpl; omega.
+      *
+Admitted.
+
 
 Lemma size_equal_pick_hyp :
   forall s : seq, forall hyps : form * list form, 
@@ -530,14 +543,17 @@ Lemma size_decrease_elim_final :
 Proof.
   intros s s' sg.
   intros H; destruct H as [Hsg Hs'].
+  induction (elim_rules_final s).
+  + simpl in Hsg. contradiction.
+  +
+  
   case_eq (elim_rules_final s).
   + intro H.
     rewrite H in Hsg.
     unfold In in Hsg.
     contradiction.
   + intros l l0 H.
-    unfold elim_rules_final in H.
-    unfold pick_hyp in H.
+    simpl in H.
     unfold elim_rules_multi in H.
 
 
