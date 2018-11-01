@@ -228,7 +228,7 @@ Qed.
 
 (* 1- *)
 
-Require Import List Arith.
+Require Import List Arith Bool.
 
 Inductive form : Set :=
     | Leaf : nat -> form (* Axiom was already taken :( *)
@@ -252,10 +252,38 @@ Fixpoint equal_form (f1 f2 : form) : bool :=
   | True_form, True_form 
   | False_form, False_form => true
   | Impl f1g f1d, Impl f2g f2d => andb (equal_form f1g f2g) (equal_form f1d f2d)
-  | And f1g f1d, Impl f2g f2d => andb (equal_form f1g f2g) (equal_form f1d f2d)
-  | Or f1g f1d, Impl f2g f2d => andb (equal_form f1g f2g) (equal_form f1d f2d) 
+  | And f1g f1d, And f2g f2d => andb (equal_form f1g f2g) (equal_form f1d f2d)
+  | Or f1g f1d, Or f2g f2d => andb (equal_form f1g f2g) (equal_form f1d f2d) 
   | _, _ => false
   end.
+
+Lemma equal_form_sound : forall f1 f2 : form, 
+  (equal_form f1 f2) = true -> f1 = f2.
+Proof.
+  fix 1.
+  intros f1 f2.
+  destruct f1,f2;
+  simpl; intro H; first [inversion H  ].
+  + apply beq_nat_true in H; rewrite H; reflexivity.
+  + reflexivity.
+  + reflexivity.
+  + apply andb_true_iff in H; destruct H as [H_1 H_2].
+    apply equal_form_sound in H_1.
+    apply equal_form_sound in H_2.
+    rewrite H_1; rewrite H_2.
+    reflexivity.
+  + apply andb_true_iff in H; destruct H as [H_1 H_2].
+    apply equal_form_sound in H_1.
+    apply equal_form_sound in H_2.
+    rewrite H_1; rewrite H_2.
+    reflexivity.
++ apply andb_true_iff in H; destruct H as [H_1 H_2].
+    apply equal_form_sound in H_1.
+    apply equal_form_sound in H_2.
+    rewrite H_1; rewrite H_2.
+    reflexivity.
+Qed.
+
 
 
 Fixpoint in_bool (l : list form) (f : form) :=
@@ -263,6 +291,22 @@ Fixpoint in_bool (l : list form) (f : form) :=
   | nil => false
   | cons f' l' => orb (equal_form f' f) (in_bool l' f)
   end.
+
+Lemma in_bool_soound :
+  forall f : form, forall l : list form,
+  in_bool l f = true -> In f l.
+Proof.
+  intros f l.
+  induction l.
+  + intro H; simpl in H; inversion H.
+  + intro H; simpl in H.
+    simpl.
+    apply orb_true_iff in H.
+    destruct H as [ H | H].
+    - apply equal_form_sound in H; left; assumption.
+    - apply IHl in H; right; assumption.
+Qed.
+
 
 Definition is_leaf ( seq : seq ) : bool :=
     match snd seq with
