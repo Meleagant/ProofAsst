@@ -331,22 +331,53 @@ Fixpoint merge_subgoals (l1 : subgoals) (l2 : subgoals) : subgoals :=
 
 Definition picked_hyp := list (form * list form).
 
-Fixpoint add_hyp (to_add : form) (hyps : picked_hyp) : picked_hyp :=
-  match hyps with
-  | nil => nil 
-  | cons (hyp, other_hyps) tl => 
-    (hyp, cons to_add other_hyps) :: (add_hyp to_add tl)
-  end.
 
-Fixpoint pick_hyp_aux ( hyps : list form ) : picked_hyp :=
+Fixpoint pick_hyp_aux ( hyps acc : list form ) : picked_hyp :=
   match hyps with
   | nil => nil
-  | cons hd tl => 
-   (hd, tl) :: (add_hyp hd (pick_hyp_aux tl))
+  | hd :: tl => (hd, acc++tl) :: (pick_hyp_aux tl (hd::acc))
   end.
 
+Lemma pick_hyp_aux_sound :
+  forall l acc: list form, 
+  forall p_hyps : form * list form,
+    In p_hyps (pick_hyp_aux l acc) -> 
+      In (fst p_hyps) l /\
+      forall f : form, In f (snd p_hyps) -> (In f l \/ In f acc).
+Proof.
+  intros l.
+  induction l; intros acc p_hyps H.
+  + split.
+    - simpl. contradiction.
+    - intros; simpl; contradiction.
+  + split.
+    - simpl in H.
+      destruct H.
+      ++ left; rewrite <- H; simpl; auto.
+      ++ simpl. right. eapply IHl with (acc := a::acc); assumption.
+    - intros f Hf.
+      simpl in H.
+      destruct H.
+      ++ rewrite <- H in Hf. simpl in Hf.
+        apply in_app_or in Hf.
+        destruct Hf.
+        +++ right; auto.
+        +++ left; simpl; right; assumption.
+      ++ assert (In (fst p_hyps) l /\ (forall f : form, In f (snd p_hyps) -> In f l \/ In f (a::acc))).
+        +++ apply (IHl (a::acc) p_hyps). assumption.
+        +++ destruct H0 as [H04 H0].
+            assert (In f l \/ In f (a :: acc)).
+            -- apply H0; assumption.
+            -- simpl in H1; destruct H1.
+              * left; simpl; right; assumption.
+              * destruct H1.
+                ** left; simpl; left; assumption.
+                ** right; assumption.
+Qed.
+
+
 Definition pick_hyp (seq : seq) : picked_hyp :=
-  pick_hyp_aux (fst seq).
+  pick_hyp_aux (fst seq) nil.
 
 Definition intro_rules (seq : seq) : subgoals :=
   match snd seq with
@@ -539,40 +570,24 @@ Proof.
       unfold size_seq; simpl; omega.
 Qed.
 
-Lemma size_equal_pick_hyp_aux :
-  forall hyps : list form, forall p_hyp : form * list form, 
-  (In p_hyp (pick_hyp_aux hyps) -> 
-    size_form (fst p_hyp) + size_hyps (snd p_hyp) = size_hyps hyps)
-  /\
-  (forall a : form,In p_hyp (add_hyp a (pick_hyp_aux hyps)) ->
-    size_form (fst p_hyp) + size_hyps (snd p_hyp) = size_form a + size_hyps hyps).
+Lemma size_equal_concat : 
+  forall l1 l2 : list form,
+  size_hyps l1 + size_hyps l2 = size_hyps (l1++l2).
 Proof.
-  intros hyps p_hyp.
-  induction hyps.
-  + split.
-    - intros H.
-      unfold pick_hyp_aux in H.
-      unfold In in H.
-      contradiction.
-    - intros a H.
-      simpl in H.
-      contradiction.
-  + (* cas [hyps = a::hyps'] *)
-    split.
-    - intro H; simpl in H.
-      destruct H as [ H | H].
-      * rewrite <- H; simpl; omega.
-      * destruct IHhyps as [I0 IH].
-        simpl.
-        apply IH.
-        apply H.
-    - intros a0 H.
-      simpl in H.
-      destruct H as [ H | H ].
-      * rewrite <- H; simpl; omega.
-      *
-Admitted.
+  intros l1 l2; induction l1; simpl; omega.
+Qed.
 
+Lemma size_equal_pick_hyp_aux :
+  forall l acc : list form,
+  forall p_hyp : form * list form,
+    In p_hyp (pick_hyp_aux l acc) ->
+    size_form (fst p_hyp) + size_hyps (snd p_hyp) <= size_hyps l.
+Proof.
+  intro l; induction l.
+  + intros; simpl; contradiction.
+  + intros p_hyp acc H. simpl in H; destruct H.
+    - rewrite <- H. simpl. omega.
+    -
 
 Lemma size_equal_pick_hyp :
   forall s : seq, forall hyps : form * list form, 
