@@ -406,14 +406,14 @@ Definition elim_rules (hyps : form * list form) (goal : form) : subgoals :=
 Fixpoint elim_rules_multi (hyps : picked_hyp) (goal : form) : subgoals :=
   match hyps with
   | nil => nil
-  | hyp :: tl => merge_subgoals (elim_rules hyp goal) (elim_rules_multi tl goal)
+  | hyp :: tl => (elim_rules hyp goal) ++ (elim_rules_multi tl goal)
   end.
 
 Definition elim_rules_final (seq : seq) : subgoals :=
   (elim_rules_multi (pick_hyp seq) (snd seq)).
   
 Definition step (seq : seq) : subgoals :=
-  merge_subgoals (intro_rules seq) (elim_rules_final seq).
+  (intro_rules seq) ++ (elim_rules_final seq).
 
 (* 4- *)
 
@@ -572,7 +572,7 @@ Qed.
 
 Lemma size_equal_concat : 
   forall l1 l2 : list form,
-  size_hyps l1 + size_hyps l2 = size_hyps (l1++l2).
+  size_hyps (l1++l2) = size_hyps l1 + size_hyps l2.
 Proof.
   intros l1 l2; induction l1; simpl; omega.
 Qed.
@@ -581,18 +581,67 @@ Lemma size_equal_pick_hyp_aux :
   forall l acc : list form,
   forall p_hyp : form * list form,
     In p_hyp (pick_hyp_aux l acc) ->
-    size_form (fst p_hyp) + size_hyps (snd p_hyp) <= size_hyps l.
+    size_form (fst p_hyp) + size_hyps (snd p_hyp) <= size_hyps l + size_hyps acc.
 Proof.
   intro l; induction l.
   + intros; simpl; contradiction.
   + intros p_hyp acc H. simpl in H; destruct H.
-    - rewrite <- H. simpl. omega.
-    -
+    - rewrite <- H. simpl. 
+      assert (size_hyps (p_hyp ++ l) = size_hyps p_hyp + size_hyps l).
+      apply size_equal_concat.
+      rewrite H0. omega.
+    - simpl; simpl in H.
+      assert (size_form (fst acc) + size_hyps (snd acc) <= size_hyps l + size_hyps (a::p_hyp)).
+      * apply IHl; assumption.
+      * simpl in H0; omega.
+Qed.
 
+Lemma size_equal_pick_hyp_aux_2 :
+  forall l : list form,
+  forall p_hyp : form * list form,
+    In p_hyp (pick_hyp_aux l nil) ->
+    size_form (fst p_hyp) + size_hyps (snd p_hyp) <= size_hyps l.
+Proof.
+  intros.
+  assert (H0 :size_form (fst p_hyp) + size_hyps (snd p_hyp) <= size_hyps l + size_hyps nil).
+  - apply (size_equal_pick_hyp_aux l nil p_hyp); assumption.
+  - simpl in H0; omega.
+Qed.
+  
+  
+  
 Lemma size_equal_pick_hyp :
   forall s : seq, forall hyps : form * list form, 
   In hyps (pick_hyp s) -> 
-    size_form (fst hyps) + size_hyps (snd hyps) = size_hyps (fst s).
+    size_form (fst hyps) + size_hyps (snd hyps) <= size_hyps (fst s).
+Proof.
+  intros; simpl.
+  apply (size_equal_pick_hyp_aux_2 (fst s) hyps).
+  unfold pick_hyp in H; assumption.
+Qed.
+
+
+Lemma concat_in : 
+  forall f : list seq,
+  forall l1 l2 : list (list seq),
+  In f (l1 ++ l2) -> In f l1 \/ In f l2.
+Proof.
+  intros f l1; induction l1.
+  + intros l2 H; simpl in H; right; assumption.
+  + simpl; intros l2 H. destruct H.
+    - left; left; assumption.
+    - apply IHl1 in H; destruct H.
+      * left; right; assumption. 
+      * right; assumption.
+Qed.
+
+Lemma size_decrease_elim_final_aux : 
+forall s : seq,
+  forall l acc : list form,
+  forall p_hyp : form * list form,
+
+In sg (elim_rules_multi (pick_hyp_aux l acc) (snd s)) /\ In s' sg ->
+size_form (fst p_hyp) + size_hyps (snd p_hyp) <= size_hyps l + size_hyps acc.
 
 
 Lemma size_decrease_elim_final : 
@@ -601,19 +650,18 @@ Lemma size_decrease_elim_final :
     -> (size_seq s') < (size_seq s).
 Proof.
   intros s s' sg.
-  intros H; destruct H as [Hsg Hs'].
-  induction (elim_rules_final s).
-  + simpl in Hsg. contradiction.
-  +
-  
-  case_eq (elim_rules_final s).
-  + intro H.
-    rewrite H in Hsg.
-    unfold In in Hsg.
-    contradiction.
-  + intros l l0 H.
-    simpl in H.
-    unfold elim_rules_multi in H.
+  unfold elim_rules_final; simpl.
+  unfold pick_hyp; unfold size_seq.
+  induction (fst s).
+  + simpl; intro; destruct H; contradiction.
+  + intro H; destruct H as [H0 H1]; simpl in H0.
+    apply (concat_in ) in H0; destruct H0.
+    - assert ((size_seq s') < (size_seq (a::l, snd s))).
+      * apply (size_decrease_elim (a, l) (snd s) s' sg).
+        split; assumption.
+      * unfold size_seq in H0; simpl in H0; simpl; omega.
+      
+Admitted.
 
 
 Lemma size_decrease : 
@@ -621,19 +669,19 @@ Lemma size_decrease :
   (In subgoal (step s)) /\ (In s' subgoal) -> (size_seq s') < (size_seq s).
 Proof.
   intros s s' sg.
-  intros H.
-  destruct H as [Hsg Hs'].
-  unfold step in Hsg.
-  
-  unfold merge_subgoals in Hsg.
-    
-  simpl.
-Admitted.
+  intros H; destruct H as [H0 H1].
+  unfold step in H0.
+  apply concat_in in H0.
+  destruct H0.
+  - apply (size_decrease_intro s s' sg); auto.
+  - apply (size_decrease_elim_final s s' sg); auto.
+Qed.
 
 (* III.3. Soundness *)
 (* ---------------- *)
 
 (* 1- *)
+
 Fixpoint sem (f : form) (sem_nat : nat -> Prop) : Prop :=
     match f with
     | True_form => True
@@ -655,4 +703,14 @@ Definition seq_valid (s : seq) : Prop :=
     forall sem_nat : nat -> Prop, 
     sem_hyps (fst s) sem_nat -> sem (snd s) sem_nat.
 
-Lemma Leaf_sound : forall s : seq, is_leaf s  -> sem  
+Lemma Leaf_sound : forall s : seq, is_leaf s = true  -> seq_valid s.
+Proof.
+  intros s H.
+  unfold seq_valid.
+  unfold is_leaf in H; destruct (snd s); simpl in H.
+  + apply orb_true_iff in H; destruct H.
+    - unfold seq_valid.
+      intros sem_nat H_hyps; simpl.
+  
+  
+  
