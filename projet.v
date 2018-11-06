@@ -636,12 +636,34 @@ Proof.
 Qed.
 
 Lemma size_decrease_elim_final_aux : 
-forall s : seq,
+  forall s s' : seq, forall sg : list seq,
   forall l acc : list form,
-  forall p_hyp : form * list form,
+  In sg (elim_rules_multi (pick_hyp_aux l acc) (snd s)) /\ In s' sg ->
+  size_seq s' < size_hyps l + size_hyps acc + size_form (snd s).
+Proof.
+  intros s s' sg l.
+  induction l.
+  - intros acc H; destruct H as [H0 H1]; simpl in H0; contradiction.
+  - intros acc H. destruct H as [H0 H1]; simpl in H0.
+    apply concat_in in H0; destruct H0.
+    + simpl.
+      assert ( (size_seq s') < (size_seq ((fst (a, acc ++ l))::(snd (a, acc ++ l)), (snd s)))).
+      * apply (size_decrease_elim (a, acc ++ l) (snd s) s' sg).
+        split; assumption.
+      * simpl in H0. unfold size_seq in H0. simpl in H0.
+        unfold size_seq.
+        assert (size_hyps (acc ++ l) = size_hyps acc + size_hyps l).
+          -- apply size_equal_concat.
+          -- rewrite H2 in H0; omega.
+   + simpl.
+     assert (size_seq s' < size_hyps l + size_hyps (a::acc) + size_form (snd s)).
+    * apply (IHl (a::acc)).
+      split; assumption.
+    * simpl in H0; omega.
+Qed.
 
-In sg (elim_rules_multi (pick_hyp_aux l acc) (snd s)) /\ In s' sg ->
-size_form (fst p_hyp) + size_hyps (snd p_hyp) <= size_hyps l + size_hyps acc.
+
+
 
 
 Lemma size_decrease_elim_final : 
@@ -651,18 +673,12 @@ Lemma size_decrease_elim_final :
 Proof.
   intros s s' sg.
   unfold elim_rules_final; simpl.
-  unfold pick_hyp; unfold size_seq.
-  induction (fst s).
-  + simpl; intro; destruct H; contradiction.
-  + intro H; destruct H as [H0 H1]; simpl in H0.
-    apply (concat_in ) in H0; destruct H0.
-    - assert ((size_seq s') < (size_seq (a::l, snd s))).
-      * apply (size_decrease_elim (a, l) (snd s) s' sg).
-        split; assumption.
-      * unfold size_seq in H0; simpl in H0; simpl; omega.
-      
-Admitted.
-
+  unfold pick_hyp. unfold size_seq.
+  intro H.
+  assert (size_seq s' < size_hyps (fst s) + size_hyps nil + size_form (snd s)).
+  + apply (size_decrease_elim_final_aux s s' sg (fst s) nil); assumption.
+  + simpl in H0; unfold size_seq in H0; omega.
+Qed.
 
 Lemma size_decrease : 
   forall s : seq, forall s' : seq, forall subgoal : list seq, 
