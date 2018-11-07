@@ -1,7 +1,10 @@
 (* Ceci est le projet du cours d'assistants de preuves du MPRI 2-7-2 *)
 (* Josselin GIET M2 DI/ENS *)
-
-
+(*
+  J'ai traité le sujet dans son intégralité, mais je ne suis pas parvenu
+  à trouver une preuve pour la question III.3.4.
+  Ce document a été testé sur la version 8.8.1 de coq.
+ *)
 (* II. Implementing the decision procedure *)
 (* ======================================= *)
 
@@ -512,9 +515,8 @@ Definition step (seq : seq) : subgoals :=
   |___||___||___|(_)|_|(_)  |_|
 *)
 Fixpoint tauto (fuel : nat) (seqt : seq) : bool :=
-  if is_leaf seqt then
-    true
-  else
+  is_leaf seqt 
+  ||
     match fuel with
     | 0 => false
     | S n =>
@@ -523,13 +525,15 @@ Fixpoint tauto (fuel : nat) (seqt : seq) : bool :=
       let subgoalz := step seqt in
       let fix handle_subgoal (subgoal: list seq) : bool :=
         match subgoal with
-        | nil => true 
-        | seq :: tl => andb(tauto n seq) (handle_subgoal tl)
+        | nil => false 
+        (* On ne doit pas avoir un sous-but vide renvoyé par `step` *)
+        | seq :: nil => tauto n seq
+        | seq :: tl => (tauto n seq) && (handle_subgoal tl)
         end in
       let fix handle_subgoals (subgoalz: subgoals) : bool :=
         match subgoalz with
         | nil => false
-        | subgoal :: tl => orb (handle_subgoal subgoal) (handle_subgoals tl)
+        | subgoal :: tl => (handle_subgoal subgoal) || (handle_subgoals tl)
         end in
       handle_subgoals subgoalz
     end. 
@@ -769,7 +773,7 @@ Qed.
   \__ \ |/ /  __/  | (_| |  __/ (__| | |  __/ (_| \__ \  __/
   |___/_/___\___|___\__,_|\___|\___|_|  \___|\__,_|___/\___|
 *)
-Lemma size_decrease :
+Theorem size_decrease :
   forall s : seq, forall s' : seq, forall subgoal : list seq, 
   (In subgoal (step s)) /\ (In s' subgoal) -> (size_seq s') < (size_seq s).
 Proof.
@@ -812,8 +816,32 @@ Fixpoint sem_hyps (hyps : list form) (sem_nat : nat -> Prop) :=
 Definition seq_valid (s : seq) : Prop :=
     forall sem_nat : nat -> Prop, 
     sem_hyps (fst s) sem_nat -> sem (snd s) sem_nat.
+    
+Fixpoint conj_seqs_valid (seqs : list seq) : Prop :=
+  match seqs with
+  | nil => True
+  | s::seqs => (seq_valid s) /\ (conj_seqs_valid seqs)
+  end.
 
-Lemma Leaf_sound : forall s : seq, is_leaf s = true  -> seq_valid s.
+Fixpoint subgoals_valid (sg : subgoals) : Prop :=
+  match sg with
+  | nil => False
+  | seqs :: sg => conj_seqs_valid seqs \/ subgoals_valid sg
+  end.
+
+(* ___  ___  ___     _____    ____
+  |_ _||_ _||_ _|   |___ /   |___ \
+   | |  | |  | |      |_ \     __) |
+   | |  | |  | |  _  ___) |_  / __/
+  |___||___||___|(_)|____/(_)|_____|
+*)
+(* _         _             __                             _ 
+  (_)___    | | ___  __ _ / _|  ___  ___  _   _ _ __   __| |
+  | / __|   | |/ _ \/ _` | |_  / __|/ _ \| | | | '_ \ / _` |
+  | \__ \   | |  __/ (_| |  _| \__ \ (_) | |_| | | | | (_| |
+  |_|___/___|_|\___|\__,_|_|___|___/\___/ \__,_|_| |_|\__,_|
+*)
+Lemma is_leaf_sound : forall s : seq, is_leaf s = true  -> seq_valid s.
 Proof.
   intros s H.
   unfold seq_valid.
@@ -821,6 +849,282 @@ Proof.
   + apply orb_true_iff in H; destruct H.
     - unfold seq_valid.
       intros sem_nat H_hyps; simpl.
+      induction (fst s).
+      * simpl in H; apply eq_true_false_abs in H.
+        -- contradiction.
+        -- reflexivity.
+      * simpl in H; apply orb_true_iff in H; simpl in H_hyps.
+        destruct H_hyps; destruct H.
+        -- apply equal_form_sound in H; rewrite H in H0.
+           simpl in H0; assumption.
+        -- apply (IHl H H1); assumption.
+    - intros sem_nat H_hyps; induction (fst s).
+      * simpl in H; apply eq_true_false_abs in H.
+        -- contradiction.
+        -- reflexivity.
+      * simpl in H; apply orb_true_iff in H; simpl in H_hyps.
+        destruct H_hyps; destruct H.
+        -- apply equal_form_sound in H; rewrite H in H0.
+           simpl in H0; contradiction.
+        -- apply (IHl H H1); assumption.
+  + intros sem_nat H_hyps; simpl; auto.
+  + intros sem_nat H_hyps; induction (fst s).
+    - simpl in H; apply eq_true_false_abs in H.
+      -- contradiction.
+      -- reflexivity.
+    - simpl in H; simpl in H_hyps; destruct H_hyps.
+      apply orb_true_iff in H; destruct H.
+      * apply equal_form_sound in H; rewrite H in H0; simpl in H0; contradiction.
+      * apply (IHl H H1); assumption.
+  + intros sem_nat H_hyps; induction (fst s).
+    - simpl in H; apply eq_true_false_abs in H.
+      -- contradiction.
+      -- reflexivity.
+    - simpl in H; simpl in H_hyps; destruct H_hyps.
+      apply orb_true_iff in H; destruct H.
+      * apply equal_form_sound in H; rewrite H in H0; simpl in H0; contradiction.
+      * apply (IHl H H1); assumption.
+  + intros sem_nat H_hyps; induction (fst s).
+    - simpl in H; apply eq_true_false_abs in H.
+      -- contradiction.
+      -- reflexivity.
+    - simpl in H; simpl in H_hyps; destruct H_hyps.
+      apply orb_true_iff in H; destruct H.
+      * apply equal_form_sound in H; rewrite H in H0; simpl in H0; contradiction.
+      * apply (IHl H H1); assumption.
+  + intros sem_nat H_hyps; induction (fst s).
+    - simpl in H; apply eq_true_false_abs in H.
+      -- contradiction.
+      -- reflexivity.
+    - simpl in H; simpl in H_hyps; destruct H_hyps.
+      apply orb_true_iff in H; destruct H.
+      * apply equal_form_sound in H; rewrite H in H0; simpl in H0; contradiction.
+      * apply (IHl H H1); assumption.
+ Qed.
+
+(* ___  ___  ___     _____    _____
+  |_ _||_ _||_ _|   |___ /   |___ /
+   | |  | |  | |      |_ \     |_ \
+   | |  | |  | |  _  ___) |_  ___) |
+  |___||___||___|(_)|____/(_)|____/
+*)
+(* Les preuves de validits dans cette section sont de la même nature que pour
+   les preuves de terminaisons.
+   ie : 
+   - deux lemmes sont les fonctions intro|elim-rules, 
+   - des lemmes pour prendre en compte la fonction `pick_hyp`
+   - Le théorême final sur la validité de la fonction step.
+*)
+Lemma intro_rules_sound :
+  forall s : seq,
+  subgoals_valid (intro_rules s) -> seq_valid s.
+Proof.
+  intros s Hs.
+  unfold intro_rules in Hs.
+  case_eq (snd s).
+  - intros n Hn; rewrite Hn in Hs; simpl in Hs; contradiction.
+  - intro H; rewrite H in Hs; simpl in Hs; contradiction. 
+  - intro H; rewrite H in Hs; simpl in Hs; contradiction. 
+  - intros f1 f2 Hf; rewrite Hf in Hs; simpl in Hs.
+    unfold seq_valid; rewrite Hf.
+    intros sem_nat Hfs.
+    destruct Hs as [Hs | Hfalse].
+    + destruct Hs as [Hs Htrue].
+      unfold seq_valid in Hs; simpl in Hs.
+      simpl; intro Hf1; apply (Hs sem_nat).
+      split; assumption.
+    + contradiction.
+  - intros f1 f2 Hf; rewrite Hf in Hs; simpl in Hs.
+    unfold seq_valid; rewrite Hf; simpl.
+    intros sem_nat Hfs.
+    unfold seq_valid in Hs; simpl.
+    destruct Hs as [Hs | Hs].
+    + destruct Hs as [H1 H2]; destruct H2 as [H2 Htrue]; split.
+      * simpl in H1; apply (H1 sem_nat Hfs).
+      * simpl in H2; apply (H2 sem_nat Hfs).
+    + contradiction.
+  - intros f1 f2 Hf; rewrite Hf in Hs; simpl in Hs.
+    unfold seq_valid; rewrite Hf; simpl.
+    intros sem_nat Hfs.
+    unfold seq_valid in Hs; simpl in Hs.
+    destruct Hs as [H1 | H2].
+    + destruct H1 as [H1 Htrue]; left; apply (H1 sem_nat Hfs).
+    + destruct H2 as [H2 | Hfalse].
+      -- destruct H2 as [H2 Htrue]; right; apply (H2 sem_nat Hfs).
+      -- contradiction.
+Qed.
+
+Lemma elim_rules_sound :
+  forall hyps : form * list form,
+  forall goal : form,
+  subgoals_valid (elim_rules hyps goal) ->
+    seq_valid ((fst hyps)::(snd hyps), goal).
+Proof.
+  intros hyps goal Hsg.
+  unfold elim_rules in Hsg.
+  case_eq (fst hyps).
+  - intros n Hf; rewrite Hf in Hsg; simpl in Hsg; contradiction.
+  - intros Hf; rewrite Hf in Hsg; simpl in Hsg; contradiction.
+  - intros Hf; rewrite Hf in Hsg; simpl in Hsg; contradiction.
+  - intros f1 f2 Hf; rewrite Hf in Hsg; simpl in Hsg.
+    unfold seq_valid; simpl.
+    intros sem_nat H; destruct H as [H12 H_hyps].
+    destruct Hsg.
+    + unfold seq_valid in H; simpl in H;
+      destruct H as [H1 H2]; destruct H2 as [H2 Htrue].
+      assert (sem f1 sem_nat) by apply (H1 sem_nat H_hyps).
+      apply H12 in H.
+      apply (H2 sem_nat); split; assumption.
+    + contradiction.
+  - intros f1 f2 Hf; rewrite Hf in Hsg; simpl in Hsg.
+    unfold seq_valid; simpl.
+    intros sem_nat H; destruct H as [H12 H_hyps].
+    destruct Hsg as [Hsg | Hfalse]. destruct Hsg as [Hsg Htrue].
+    + unfold seq_valid in Hsg; simpl in Hsg.
+      apply Hsg; split;  try split; destruct H12; assumption.
+    + contradiction.
+  - intros f1 f2 Hf; rewrite Hf in Hsg; simpl in Hsg.
+    unfold seq_valid; simpl.
+    intros sem_nat H; destruct H as [H12 H_hyps].
+    destruct Hsg.
+    destruct H as [Hf1 Hf2]; destruct Hf2 as [Hf2 Htrue].
+    + destruct H12 as [H1 | H2].
+      * unfold seq_valid in Hf1; simpl in Hf1;
+        apply (Hf1 sem_nat); split; assumption.
+      * unfold seq_valid in Hf2; simpl in Hf2;
+        apply (Hf2 sem_nat); split; assumption.
+    + contradiction.
+Qed.
+
+Lemma concat_subgoals_sound :
+  forall sg1 sg2 : subgoals,
+  subgoals_valid (sg1 ++ sg2) -> 
+    subgoals_valid sg1 \/ subgoals_valid sg2.
+Proof.
+  intros sg1 sg2; induction sg1.
+  - simpl; intro H; right; assumption.
+  - simpl; intro H; destruct H.
+    + left; left; assumption.
+    + apply IHsg1 in H. destruct H.
+      * left; right; assumption.
+      * right; assumption.
+Qed.
+
+(* Pour ce lemme, l'équivalence est nécessaire. *)
+Lemma concat_hyps_sound :
+  forall sem_nat : nat -> Prop,
+  forall l1 l2 : list form,
+  sem_hyps (l1 ++ l2) sem_nat <->
+    sem_hyps l1 sem_nat /\ sem_hyps l2 sem_nat.
+Proof.
+  intros sem_nat l1 l2; induction l1.
+  - simpl; split.
+    + intro; split; auto.
+    + intro H; destruct H; assumption.
+  - simpl; split.
+    + intro H; destruct H as [Ha H]; apply IHl1 in H; destruct H;
+      split; try split; assumption.
+    + intro H. destruct H as [H H2]; destruct H as [Ha H1].
+      split; try assumption.
+      apply IHl1; split; assumption.
+Qed.
+
+
+Lemma elim_rules_final_sound_aux :
+  forall goal : form,
+  forall l acc : list form,
+  subgoals_valid (elim_rules_multi (pick_hyp_aux l acc) goal) ->
+    seq_valid (l++acc, goal).
+Proof.
+  intros goal l; induction l.
+  - intros acc H; simpl in H; contradiction.
+  - intros acc H; simpl in H.
+    apply concat_subgoals_sound in H; destruct H.
+    + assert (seq_valid (a::(acc++l), goal))
+      by apply (elim_rules_sound (a, acc ++ l) goal H).
+      unfold seq_valid; simpl; unfold seq_valid in H0; simpl in H0.
+      intros sem_nat H_hyps; destruct H_hyps; apply (H0 sem_nat); split.
+      * assumption.
+      * apply concat_hyps_sound in H2; destruct H2.
+        apply concat_hyps_sound; split; assumption.
+    + assert (seq_valid (l ++ (a::acc), goal)) by apply (IHl (a::acc) H).
+      unfold seq_valid; simpl; unfold seq_valid in H0; simpl in H0.
+      intros sem_nat H_hyps; apply H0.
+      destruct H_hyps as [Ha H_hyps]; apply concat_hyps_sound in H_hyps; 
+      destruct H_hyps as [Hl Hacc].
+      apply concat_hyps_sound; simpl; auto.
+Qed.
+
+Lemma elim_rules_final_sound :
+  forall s : seq,
+  subgoals_valid (elim_rules_final s) -> seq_valid s.
+Proof.
+  intros s Hs. unfold elim_rules_final in Hs. unfold pick_hyp in Hs.
+  unfold seq_valid.
+  apply elim_rules_final_sound_aux in Hs; unfold seq_valid in Hs; simpl in Hs.
+  intros sem_nat H; apply Hs. 
+  apply concat_hyps_sound; split; simpl; auto.
+Qed.
+
+(*    _                                          _ 
+  ___| |_ ___ _ __     ___  ___  _   _ _ __   __| |
+ / __| __/ _ \ '_ \   / __|/ _ \| | | | '_ \ / _` |
+ \__ \ ||  __/ |_) |  \__ \ (_) | |_| | | | | (_| |
+ |___/\__\___| .__/___|___/\___/ \__,_|_| |_|\__,_|
+*)
+Theorem step_sound :
+  forall s : seq,
+    subgoals_valid ( step s ) -> seq_valid s.
+Proof.
+  intros s H; unfold step in H; apply concat_subgoals_sound in H; destruct H.
+  + apply intro_rules_sound; assumption.
+  + apply elim_rules_final_sound; assumption.
+Qed.
+
+(* ___  ___  ___     _____   _  _
+  |_ _||_ _||_ _|   |___ /  | || |
+   | |  | |  | |      |_ \  | || |_
+   | |  | |  | |  _  ___) |_|__   _|
+  |___||___||___|(_)|____/(_)  |_|
+*)
+(* _              _                                     _ 
+  | |_ __ _ _   _| |_ ___     ___  ___  _   _ _ __   __| |
+  | __/ _` | | | | __/ _ \   / __|/ _ \| | | | '_ \ / _` |
+  | || (_| | |_| | || (_) |  \__ \ (_) | |_| | | | | (_| |
+   \__\__,_|\__,_|\__\___/___|___/\___/ \__,_|_| |_|\__,_|
+*)
+Theorem tauto_sound : 
+  forall n : nat,
+  forall seq : seq,
+  tauto n seq = true -> seq_valid seq.
+Proof.
+  intros n; induction n.
+  - intros seq Hs; simpl in Hs. apply orb_true_iff in Hs. destruct Hs.
+    + apply is_leaf_sound in H; assumption.
+    + apply eq_true_false_abs in H; try reflexivity. contradiction.
+  - intros seq Hs; simpl in Hs; apply orb_true_iff in Hs; destruct Hs as [Hs|Hs].
+    + apply is_leaf_sound in Hs; auto.
+    + case_eq (step seq).
+      * intro H_seq; rewrite H_seq in Hs; simpl in Hs.
+        apply eq_true_false_abs in Hs; try reflexivity; contradiction.
+      * intros sg sgs H_seq; rewrite H_seq in Hs.
+        apply orb_true_iff in Hs; destruct Hs as [Hs|Hs].
+        -- case_eq sg.
+          ++ intro H; rewrite H in Hs; simpl in Hs.
+             apply eq_true_false_abs in Hs; try reflexivity; contradiction.
+          ++ intros s l Hsg; rewrite Hsg in Hs.
+             induction l.
+             ** apply IHn in Hs. rewrite Hsg in H_seq.
+                assert (subgoals_valid (step seq)).
+                --- rewrite H_seq; simpl; left; auto.
+                --- apply step_sound; assumption.
+             ** 
 Admitted.
-  
-  
+
+(* Je ne suis pas parvenu à trouver une tactique de preuve efficace : 
+  les doubles points fixes m'ont compliqué la tache !
+  Mais je ne sais pas comment m'en débarrassé dans l'implémentation ... *)
+
+
+
+
