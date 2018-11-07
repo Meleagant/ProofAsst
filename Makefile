@@ -1,5 +1,5 @@
 all: 
-	coqc projet.v
+	 coqc projet.v
 
 clean:
 	rm -f *.vo 
